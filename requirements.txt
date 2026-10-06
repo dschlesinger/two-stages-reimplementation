@@ -1,0 +1,29 @@
+# Install torch first, matching the CUDA version of the GPU machine:
+#   https://pytorch.org/get-started/locally/
+torch>=2.2
+
+# ESMFold (transformers ships EsmForProteinFolding, no separate openfold install needed)
+transformers>=4.40
+huggingface_hub>=0.23
+
+# Boltz-1 (the boltz package runs Boltz-1 with `--model boltz1`)
+boltz
+
+# OpenFold is not on PyPI and compiles a CUDA extension, so it is left out of
+# the default install. With the CUDA toolkit available:
+#   pip install "openfold @ git+https://github.com/aqlaboratory/openfold.git"
+# Its dependencies are older than Boltz's; use a separate environment if they conflict.
+
+# Analysis: probes, ROC-AUC, Procrustes/CKA, plots
+numpy
+scipy
+scikit-learn
+pandas
+matplotlib
+tqdm
+
+# Structure I/O and PDB parsing
+biopython
+
+# Secondary structure assignment uses the DSSP binary (mkdssp), which is not a
+# pip package: `conda install -c conda-forge dssp` or `apt-get install dssp`.

@@ -1,0 +1,17 @@
+# Paper copies (get it from https://arxiv.org/abs/2602.06020)
+paper/
+
+# Model weights and outputs
+weights/
+outputs/
+*.pt
+*.ckpt
+*.bin
+*.pkl
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
