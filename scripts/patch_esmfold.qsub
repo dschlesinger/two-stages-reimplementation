@@ -1,0 +1,31 @@
+#!/bin/bash -l
+# ESMFold patching on one L40S. Submit from the repo root; arguments after the
+# file name go straight to scripts/patch_esmfold.py:
+#
+#   qsub scripts/patch_esmfold.qsub full
+#   qsub scripts/patch_esmfold.qsub full --limit 20
+#   qsub scripts/patch_esmfold.qsub single --model /path/to/weights/esmfold
+#
+# Rerunning a stage resumes from its CSV, so resubmit if the time limit cuts it off.
+
+# Fill in the project name, or delete this line and pass -P on the qsub command line.
+#$ -P
+#$ -N patch_esmfold
+#$ -l gpus=1
+#$ -l gpu_type=L40S
+#$ -pe omp 8
+#$ -l h_rt=48:00:00
+#$ -cwd
+#$ -j y
+
+# Activate the environment that has requirements.txt and mkdssp, for example:
+# module load miniconda
+# conda activate two-stages
+
+if [ $# -eq 0 ]; then
+    echo "usage: qsub scripts/patch_esmfold.qsub {full|single|summary} [--limit N] [--model DIR]" >&2
+    exit 1
+fi
+
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+python scripts/patch_esmfold.py "$@"
