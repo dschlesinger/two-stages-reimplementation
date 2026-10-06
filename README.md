@@ -2,7 +2,7 @@
 
 Reimplementation of [Two Stages of Folding: Convergent Mechanisms in AI Protein Folding Trunks](https://arxiv.org/abs/2602.06020) (Lu et al., 2026).
 
-Work in progress. So far the repo only contains setup:
+Work in progress. So far the repo contains setup and the ESMFold patching experiment:
 
 ```bash
 pip install -r requirements.txt
@@ -11,6 +11,15 @@ python scripts/download_data.py                    # ~50 MB: the authors' datase
 ```
 
 See the comments in `requirements.txt` for OpenFold and DSSP, which are installed separately.
+
+## ESMFold patching
+
+```bash
+python scripts/patch_esmfold.py full      # patch s and z at all 48 blocks, 4,870 donor-target pairs
+python scripts/patch_esmfold.py single    # one block at a time, for the pairs where full patching made a hairpin
+```
+
+Results go to `outputs/patching/`: one CSV row per fold, plus the per-block success rates and plot (Fig. 1). Both stages resume when rerun, and `--limit N` runs the first N cases. Needs a GPU and `mkdssp` on the PATH.
 
 ## Data
 
