@@ -35,7 +35,10 @@ if [ ${#args[@]} -eq 0 ]; then
     exit 1
 fi
 
-# The environment needs the packages from requirements.txt; mkdssp must be on the PATH as well.
+# mkdssp comes from the cluster module. Loaded before the venv so the venv's python stays first on the PATH.
+module load dssp
+
+# The environment needs the packages from requirements.txt.
 if [ -n "$venv" ]; then
     source "$venv/bin/activate" || exit 1
 fi
