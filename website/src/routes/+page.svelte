@@ -48,7 +48,7 @@
 	its components, math and PyTorch code.
 	<span class="rounded-full border border-dashed border-space-indigo-700 px-2 py-0.5 font-mono text-space-indigo-900">Pill</span>
 	is a tensor with its shape: click it for what it holds. L is the sequence length, S the number of aligned sequences. Scroll
-	to pan.
+	to pan; the corner button in the chart goes full screen.
 </p>
 
 {#key model.name}
