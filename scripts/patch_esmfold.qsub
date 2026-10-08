@@ -10,8 +10,7 @@
 # --venv activates that virtualenv first; it is not passed on to the Python script.
 # Rerunning a stage resumes from its CSV, so resubmit if the time limit cuts it off.
 
-# Fill in the project name, or delete this line and pass -P on the qsub command line.
-#$ -P
+# Pass the project with -P on the qsub command line: qsub -P <project> scripts/patch_esmfold.qsub ...
 #$ -N patch_esmfold
 #$ -l gpus=1
 #$ -l gpu_type=L40S
