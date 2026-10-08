@@ -39,12 +39,20 @@ module load dssp
 
 # Triton compiles a C helper on first use and needs Python.h, which the system python the venv is built on lacks.
 # The module python has the headers; they must be for the same minor version as the venv.
-module load python3/3.12.15
+module load python3/3.12.4 || exit 1
+header_version="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 export C_INCLUDE_PATH="$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["include"])')${C_INCLUDE_PATH:+:$C_INCLUDE_PATH}"
 
 # The environment needs the packages from requirements.txt.
 if [ -n "$venv" ]; then
     source "$venv/bin/activate" || exit 1
+fi
+
+# Headers from another Python version compile, then fail at run time inside Triton.
+python_version="$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+if [ "$header_version" != "$python_version" ]; then
+    echo "Python headers are for $header_version but the job runs Python $python_version; fix the python3 module above." >&2
+    exit 1
 fi
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
