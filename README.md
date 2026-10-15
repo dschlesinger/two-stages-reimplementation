@@ -31,10 +31,10 @@ Saves `outputs/charge/charge_directions.pt` with unit charge (K/R/H minus D/E), 
 
 ```bash
 python scripts/charge_shapes.py --preset clamp                 # steer a neutral poly-alanine chain
-python scripts/charge_shapes.py --preset splay --strength 1 2 3 5
+python scripts/charge_shapes.py --preset all --strength 1 2 3 5 --axis signed
 ```
 
-Folds a chain with no charged residues and steers chosen segments with those directions during an early block window, to see whether opposite charges pull the segments together and like charges push them apart. `--preset clamp` puts opposite charges near the two ends, `splay` puts the same charge on both, `zigzag` alternates three segments; `--segments 4-14:+ 26-36:-` sets them directly. Writes one PDB per fold plus `shapes.csv` with pLDDT, radius of gyration, end-to-end distance and the mean distance between each steered pair, to `outputs/charge/shapes/`. This goes past what the paper validates: its steering acts on helical motifs in real proteins, so expect low pLDDT on a uniform sequence and read the geometry rather than the DSSP string.
+Folds a chain with no charged residues and steers chosen segments with those directions during an early block window, to see whether opposite charges pull the segments together and like charges push them apart. `--preset clamp` puts opposite charges near the two ends, `splay` puts the same charge on both, `zigzag` alternates three segments, and `all` runs the three against one shared baseline; `--segments 4-14:+ 26-36:-` sets them directly. The unsteered baseline is always folded, in the same batch as the steered copies. Writes one PDB per fold plus `shapes.csv` with pLDDT, radius of gyration, end-to-end distance and the mean distance between each steered pair, to `outputs/charge/shapes/`. This goes past what the paper validates: its steering acts on helical motifs in real proteins, so expect low pLDDT on a uniform sequence and read the geometry rather than the DSSP string.
 
 ## Data
 

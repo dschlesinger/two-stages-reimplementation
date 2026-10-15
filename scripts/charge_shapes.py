@@ -19,6 +19,7 @@ Presets, with the default 40-residue sequence:
     splay    + on both of those segments: they repel, so the chain should
              straighten out
     zigzag   + on 2-9, - on 15-23, + on 30-37: alternating, for a meander
+    all      every preset above, against one shared baseline
     none     no steering, baseline only
 
 Segments can also be given directly, 0-based with the end excluded, as in the
@@ -28,13 +29,16 @@ patch regions elsewhere in the repo:
 
 Usage:
     python scripts/charge_shapes.py --preset clamp
-    python scripts/charge_shapes.py --preset clamp --strength 1 2 3 5
+    python scripts/charge_shapes.py --preset all --strength 1 2 3 5 --axis signed
     python scripts/charge_shapes.py --preset splay --sequence $(python -c "print('A'*60)")
     python scripts/charge_shapes.py --preset clamp --blocks 0-14 --axis signed
 
 --axis picks what gets added: signed uses +/- the one charge axis, as the paper
 does; poles uses the separate positive and negative directions, each measured
 from the neutral mean, which suits a sequence that starts out neutral.
+
+The unsteered baseline is always folded, in the same batch as the steered
+copies, so nothing but the intervention differs between them.
 
 Writes one PDB per fold, plus shapes.csv with the geometry, to --out. Needs a
 GPU and the directions from scripts/charge_directions.py; mkdssp is optional.
@@ -133,14 +137,23 @@ def geometry(ca, segments):
     return out
 
 
-def describe(segments, strength):
-    parts = [f"{start}-{end}{'+' if sign > 0 else '-'}" for start, end, sign in segments]
-    return f"{'_'.join(parts)}_a{strength:g}" if parts else "baseline"
+def describe(segments):
+    return "_".join(f"{start}-{end}{'+' if sign > 0 else '-'}" for start, end, sign in segments)
+
+
+def conditions(args):
+    """The (name, segments) pairs to steer; empty means the baseline fold is the whole run."""
+    if args.segments:
+        return [("custom", parse_segments(args.segments))]
+    if args.preset == "all":
+        return [(name, PRESETS[name]) for name in PRESETS if PRESETS[name]]
+    return [(args.preset, PRESETS[args.preset])] if PRESETS[args.preset] else []
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--preset", choices=sorted(PRESETS), default="clamp")
+    p.add_argument("--preset", choices=sorted(PRESETS) + ["all"], default="clamp",
+                   help="all runs every steered preset against one shared baseline")
     p.add_argument("--segments", nargs="+", help="steered segments as START-END:+ or START-END:-, overriding --preset")
     p.add_argument("--sequence", default="A" * 40, help="the neutral sequence to fold")
     p.add_argument("--strength", type=float, nargs="+", default=[3.0], help="steering strength in sigmas")
@@ -155,9 +168,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    segments = parse_segments(args.segments) if args.segments else PRESETS[args.preset]
-    if not segments:
-        args.strength = []  # nothing to steer, so the baseline fold is the whole run
+    steered = conditions(args)
     charged = set(args.sequence) & set("KRHDE")
     if charged:
         print(f"warning: the sequence already carries charge at {sorted(charged)}")
@@ -174,17 +185,20 @@ def main():
     dim = directions[+1].shape[-1]
 
     length = len(args.sequence)
-    labels = ["baseline"] + [describe(segments, s) for s in args.strength]
-    # Element 0 of the batch is the unsteered baseline, then one per strength, steered inside the window only.
-    batch_delta = torch.zeros(num_blocks, len(labels), length, dim, device=args.device)
-    for b, strength in enumerate(args.strength, start=1):
+    # One unsteered baseline, then every condition at every strength, all in one batch.
+    jobs = [(name, segments, strength) for name, segments in steered for strength in args.strength]
+    print(f"{len(args.sequence)} residues, baseline + {len(jobs)} steered fold{'' if len(jobs) == 1 else 's'}, "
+          f"blocks {args.blocks}, axis {args.axis}")
+
+    batch_delta = torch.zeros(num_blocks, len(jobs) + 1, length, dim, device=args.device)
+    for b, (_, segments, strength) in enumerate(jobs, start=1):
         delta = segment_deltas(segments, directions, sigma, strength, length, dim, args.device)
         for k in window:
             batch_delta[k, b] = delta[k]
 
     handles = steering(model, batch_delta)
     try:
-        outputs = fold(model, tokenizer, args.sequence, len(jobs))
+        outputs = fold(model, tokenizer, args.sequence, len(jobs) + 1)
     finally:
         for h in handles:
             h.remove()
@@ -194,16 +208,26 @@ def main():
         print("mkdssp not on PATH; skipping the secondary structure check")
     pdbs = model.output_to_pdb(outputs)
     plddt = outputs.plddt[:, :, 1].float().cpu()
+    # The baseline is scored against every condition's segment pairs, so each steered row has a reference.
+    all_segments = [segments for _, segments in steered]
+    labels = ["baseline"] + [f"{name}_a{strength:g}" for name, _, strength in jobs]
     rows = []
     for b, label in enumerate(tqdm(labels, desc="scoring")):
         (args.out / f"{label}.pdb").write_text(pdbs[b])
         ss = run_dssp(pdbs[b], length) if have_dssp else None
+        ca = outputs.positions[-1, b, :, 1].float().cpu()
+        distances = geometry(ca, [])  # radius of gyration and end to end, whether or not anything is steered
+        for segments in (all_segments if b == 0 else [jobs[b - 1][1]]):
+            distances.update(geometry(ca, segments))
         rows.append({
             "label": label,
-            "strength": 0.0 if b == 0 else args.strength[b - 1],
+            "preset": "" if b == 0 else jobs[b - 1][0],
+            "segments": "" if b == 0 else describe(jobs[b - 1][1]),
+            "strength": 0.0 if b == 0 else jobs[b - 1][2],
             "blocks": "" if b == 0 else args.blocks,
+            "axis": "" if b == 0 else args.axis,
             "plddt": round(plddt[b].mean().item(), 4),
-            **{k: round(v, 2) for k, v in geometry(outputs.positions[-1, b, :, 1].float().cpu(), segments).items()},
+            **{k: round(v, 2) for k, v in distances.items()},
             "hairpin": "" if ss is None else bool(find_hairpins(ss)),
             "dssp": ss or "",
         })
