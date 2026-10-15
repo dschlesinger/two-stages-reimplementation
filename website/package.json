@@ -29,6 +29,7 @@
 	},
 	"dependencies": {
 		"@xyflow/svelte": "^1.7.0",
+		"3dmol": "^2.5.5",
 		"katex": "^0.19.0",
 		"shiki": "^4.5.0"
 	}

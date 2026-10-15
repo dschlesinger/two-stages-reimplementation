@@ -1,6 +1,26 @@
 <script lang="ts">
 	import modulePatching from '#lib/assets/module_patching_success.png';
 	import singleBlock from '#lib/assets/single_block_success.png';
+	import ShapeComparison from '#lib/components/ShapeComparison.svelte';
+	import { baseline, loadPdb, presets } from '#lib/chargeShapes.ts';
+
+	const shapeTests = [
+		{
+			preset: 'clamp',
+			title: 'Clamp: opposite charges at the two ends',
+			summary: 'If the charge direction acts like charge, the two ends should attract and fold the chain back on itself.'
+		},
+		{
+			preset: 'splay',
+			title: 'Splay: the same charge at both ends',
+			summary: 'Like charges should repel, so the two segments should move apart and the chain should straighten.'
+		},
+		{
+			preset: 'zigzag',
+			title: 'Zigzag: alternating charges on three segments',
+			summary: 'Neighbouring segments carry opposite charges, so each should pull toward the next, giving a meander.'
+		}
+	];
 </script>
 
 <div class="max-w-4xl">
@@ -48,4 +68,20 @@
 			all 4,870 cases; over all cases, sequence patching at block 0 succeeds 23.5% of the time.
 		</figcaption>
 	</figure>
+
+	<h2 class="mt-8 text-lg font-semibold text-white">Charge steering on poly-alanine (ESMFold)</h2>
+	<p class="mt-1 text-sm leading-relaxed text-space-indigo-800">
+		A 40-residue poly-alanine chain has no charged residues. During trunk blocks 0–14, the positive or negative charge direction
+		found in the sequence state is added to chosen segments, scaled to a number of standard deviations of its projection. Each
+		steered fold is shown next to the same chain folded without steering, from the same batch. This goes beyond what the paper
+		tests: its steering acts on helical motifs in real proteins, while a uniform chain gives the model no other signal, so read
+		the geometry more than the pLDDT or DSSP.
+	</p>
+
+	{#each shapeTests as test (test.preset)}
+		{@const p = presets.get(test.preset)}
+		{#if p}
+			<ShapeComparison title={test.title} summary={test.summary} segments={p.segments} {baseline} runs={p.runs} {loadPdb} />
+		{/if}
+	{/each}
 </div>
