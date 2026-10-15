@@ -6,7 +6,9 @@
 #   qsub scripts/patch_esmfold.qsub full --limit 20
 #   qsub scripts/patch_esmfold.qsub single --model /path/to/weights/esmfold
 #   qsub scripts/patch_esmfold.qsub full --venv /path/to/venv
+#   qsub -N charge_directions scripts/patch_esmfold.qsub scripts/charge_directions.py --model /path/to/weights/esmfold
 #
+# A first argument ending in .py runs that script instead of scripts/patch_esmfold.py.
 # --venv activates that virtualenv first; it is not passed on to the Python script.
 # Rerunning a stage resumes from its CSV, so resubmit if the time limit cuts it off.
 
@@ -29,8 +31,12 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ ${#args[@]} -eq 0 ]; then
-    echo "usage: qsub scripts/patch_esmfold.qsub {full|single|summary} [--limit N] [--model DIR] [--venv DIR]" >&2
+script=scripts/patch_esmfold.py
+if [[ "${args[0]}" == *.py ]]; then
+    script="${args[0]}"
+    args=("${args[@]:1}")
+elif [ ${#args[@]} -eq 0 ]; then
+    echo "usage: qsub scripts/patch_esmfold.qsub [SCRIPT.py] {full|single|summary} [--limit N] [--model DIR] [--venv DIR]" >&2
     exit 1
 fi
 
@@ -58,4 +64,4 @@ if [ "$header_version" != "$python_version" ]; then
 fi
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-python scripts/patch_esmfold.py "${args[@]}"
+python "$script" "${args[@]}"

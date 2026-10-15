@@ -2,7 +2,7 @@
 
 Reimplementation of [Two Stages of Folding: Convergent Mechanisms in AI Protein Folding Trunks](https://arxiv.org/abs/2602.06020) (Lu et al., 2026).
 
-Work in progress. So far the repo contains setup and the ESMFold patching experiment:
+Work in progress. So far the repo contains setup, the ESMFold patching experiment and the charge directions:
 
 ```bash
 pip install -r requirements.txt
@@ -20,6 +20,14 @@ python scripts/patch_esmfold.py single    # one block at a time, for the pairs w
 ```
 
 Results go to `outputs/patching/`: one CSV row per fold, plus the per-block success rates and plot (Fig. 1). Both stages resume when rerun, and `--limit N` runs the first N cases. Needs a GPU and `mkdssp` on the PATH.
+
+## Charge directions
+
+```bash
+python scripts/charge_directions.py       # difference of means over the 200 helical training proteins (Eq. 4)
+```
+
+Saves `outputs/charge/charge_directions.pt` with unit charge (K/R/H minus D/E), positive and negative (each minus the neutral mean) directions, their projection spreads for steering in sigmas, and the per-amino-acid means. Index k is the sequence state entering trunk block k, and the last index is the trunk output. `charge_evaluation.csv` has the per-depth ROC-AUC on the test split. On the cluster: `qsub scripts/patch_esmfold.qsub scripts/charge_directions.py`.
 
 ## Data
 
