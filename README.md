@@ -29,6 +29,13 @@ python scripts/charge_directions.py       # difference of means over the 200 hel
 
 Saves `outputs/charge/charge_directions.pt` with unit charge (K/R/H minus D/E), positive and negative (each minus the neutral mean) directions, their projection spreads for steering in sigmas, and the per-amino-acid means. Index k is the sequence state entering trunk block k, and the last index is the trunk output. `charge_evaluation.csv` has the per-depth ROC-AUC on the test split. On the cluster: `qsub scripts/patch_esmfold.qsub scripts/charge_directions.py`.
 
+```bash
+python scripts/charge_shapes.py --preset clamp                 # steer a neutral poly-alanine chain
+python scripts/charge_shapes.py --preset splay --strength 1 2 3 5
+```
+
+Folds a chain with no charged residues and steers chosen segments with those directions during an early block window, to see whether opposite charges pull the segments together and like charges push them apart. `--preset clamp` puts opposite charges near the two ends, `splay` puts the same charge on both, `zigzag` alternates three segments; `--segments 4-14:+ 26-36:-` sets them directly. Writes one PDB per fold plus `shapes.csv` with pLDDT, radius of gyration, end-to-end distance and the mean distance between each steered pair, to `outputs/charge/shapes/`. This goes past what the paper validates: its steering acts on helical motifs in real proteins, so expect low pLDDT on a uniform sequence and read the geometry rather than the DSSP string.
+
 ## Data
 
 `scripts/download_data.py` pulls the authors' released datasets, which contain the exact donor-target pairs, patch regions, and probing splits with sequences inline. Add `--full` for their 1 GB block-patching results or `--results` for their result tables and figures.
