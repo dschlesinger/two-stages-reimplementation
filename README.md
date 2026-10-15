@@ -36,6 +36,15 @@ python scripts/charge_shapes.py --preset all --strength 1 2 3 5 --axis signed
 
 Folds a chain with no charged residues and steers chosen segments with those directions during an early block window, to see whether opposite charges pull the segments together and like charges push them apart. `--preset clamp` puts opposite charges near the two ends, `splay` puts the same charge on both, `zigzag` alternates three segments, and `all` runs the three against one shared baseline; `--segments 4-14:+ 26-36:-` sets them directly. The unsteered baseline is always folded, in the same batch as the steered copies. Writes one PDB per fold plus `shapes.csv` with pLDDT, radius of gyration, end-to-end distance and the mean distance between each steered pair, to `outputs/charge/shapes/`. This goes past what the paper validates: its steering acts on helical motifs in real proteins, so expect low pLDDT on a uniform sequence and read the geometry rather than the DSSP string.
 
+## Pairwise scaling
+
+```bash
+python scripts/scale_pairwise.py 0 0.5 1 1.5 2              # three dataset targets, z scaled
+python scripts/scale_pairwise.py 0 0.5 1 1.5 2 --target both --limit 5
+```
+
+Folds each protein once per scale factor, multiplying the trunk's projection into the structure module, `trunk2sm_z(z)`, by that factor while leaving s alone (section 5.1, Fig. 6c). Every scale is an element of one batch, so the trunk computation behind them is identical. Scale 1.0 is always included as the baseline. `--target s` scales the sequence projection instead and `both` does each in turn, which is the paper's control: scaling z should move output distances monotonically, scaling s should do nothing. Writes one PDB per protein per scale plus `scaling.csv` with the mean pairwise CA distance and its deviation from the unscaled fold, to `outputs/scaling/`. The gradient at the operating point (Fig. 6d) is not computed.
+
 ## Data
 
 `scripts/download_data.py` pulls the authors' released datasets, which contain the exact donor-target pairs, patch regions, and probing splits with sequences inline. Add `--full` for their 1 GB block-patching results or `--results` for their result tables and figures.
