@@ -22,7 +22,7 @@
 
 	const COLORS = { chain: '#9f98c9', '+': '#d7263d', '-': '#1b998b', background: '#1b182e' };
 
-	let index = $state(untrack(() => Math.max(0, runs.findIndex((r) => r.strength === 3))));
+	let index = $state(untrack(() => Math.max(0, runs.findIndex((r) => r.strength === 0.5))));
 	const run = $derived(runs[index]);
 	let rmsd = $state<number | null>(null);
 

@@ -61,8 +61,8 @@
 		const placed = atoms.filter((a) => a.atom === 'CA').map((a) => [a.x!, a.y!, a.z!] as Vec3);
 		const stretched = placed.some((p, i) => i > 0 && Math.hypot(...p.map((v, k) => v - placed[i - 1][k])) > MAX_BOND);
 		if (reference) broken = stretched;
-		if (stretched) {
-			// A stretched backbone has no bonds for the cartoon to follow, so draw the CA trace itself.
+		if (reference) {
+			// The scaled fold is always the CA trace as balls and sticks, so it reads the same whether or not the backbone is stretched.
 			viewer.setStyle({}, {});
 			placed.forEach((p, i) => {
 				const color = spectrum(i, placed.length);
@@ -122,10 +122,12 @@
 		loadPdb(name, scale).then((pdb) => {
 			if (name !== protein.name || scale !== run.scale) return;
 			show(v.scaled, pdb, reference);
-			// Frame whichever fold is larger so both fit, then give the other the same camera.
-			const [big, small] = run.radiusOfGyration > baseline.radiusOfGyration ? [v.scaled, v.baseline] : [v.baseline, v.scaled];
-			big.zoomTo();
-			small.setView(big.getView());
+			// Frame the unscaled fold, backed off to leave room for the largest scale, so the camera is fixed for the protein
+			// and the unscaled fold keeps its size as the slider moves. The scaled view takes the same camera.
+			const widest = Math.max(...protein.runs.map((r) => r.radiusOfGyration));
+			v.baseline.zoomTo();
+			v.baseline.zoom(baseline.radiusOfGyration / widest);
+			v.scaled.setView(v.baseline.getView());
 			v.baseline.render();
 			v.scaled.render();
 		});
@@ -176,13 +178,13 @@
 	{:else}
 		<p class="mt-2 text-xs text-space-indigo-700">
 			Drag to rotate, scroll to zoom; the two views move together. Colour runs from the N terminus (blue) to the C terminus
-			(red). The scaled fold is superposed on the unscaled one by CA atoms.
+			(red). The unscaled fold is drawn as a ribbon and the scaled fold as its CA trace in balls and sticks; the scaled fold is
+			superposed on the unscaled one by CA atoms.
 		</p>
 		{#if broken}
 			<p class="mt-1 text-xs text-space-indigo-700">
-				At this scale the consecutive CA atoms are no longer 3.8 Å apart, so the backbone is stretched and cannot be drawn as a
-				cartoon; the scaled fold is shown as its CA trace. DSSP finds no secondary structure in it for the same reason, even
-				though pLDDT stays high at scales above 1.
+				At this scale the consecutive CA atoms are no longer 3.8 Å apart, so the backbone is stretched and could not be drawn as
+				a cartoon. DSSP finds no secondary structure in it for the same reason, even though pLDDT stays high at scales above 1.
 			</p>
 		{/if}
 	{/if}
