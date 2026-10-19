@@ -13,17 +13,23 @@ Per block, one fold without recycling records
                 only place z reaches s (it carries the pair bias)
     pair_bias   the output of block.pair_to_sequence, the bias alone; a weaker
                 proxy for pair2seq, plotted for comparison
-Each is the Frobenius norm over all positions. Within a protein, a pathway's 48
-norms are divided by their maximum; the plot averages that over proteins.
+Each is the Frobenius norm over all positions. The blocks are pre-norm: each
+sublayer LayerNorms its input and adds its raw output to the residual stream, so
+these are raw updates and their size depends on how large the stream is at that
+block. --measure relative divides each update by the norm of the state entering
+the block (s for pair2seq, z for seq2pair), which is the size the next LayerNorm
+sees it against. Within a protein, a pathway's 48 values are divided by their
+maximum; the plot averages that over proteins.
 
 Usage:
     python scripts/pathway_contributions.py
     python scripts/pathway_contributions.py --set both --limit 20
     python scripts/pathway_contributions.py --plot-only          # redraw from the CSV
+    python scripts/pathway_contributions.py --plot-only --measure relative
 
 --set picks the sequences: the patching dataset's helical targets, its hairpin
 donors, or both. --sequence folds one given sequence instead. Writes
-pathways.csv (raw and normalized norm per protein per block) and
+pathways.csv (raw and relative norms, each also scaled by its maximum, per protein per block) and
 pathway_contributions.png to --out. Needs a GPU for the folds.
 """
 
@@ -51,9 +57,18 @@ COLORS = {"seq2pair": "#2a78d6", "pair2seq": "#eb6834", "pair_bias": "#898781"}
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#898781", "#e6e5e1", "#fcfcfb"
 
 
+# The state each pathway's update is written into: seq2pair adds to z, the pair2seq paths add to s.
+STREAM = {"seq2pair": "z", "pair2seq": "s", "pair_bias": "s"}
+
+
 def recording(blocks):
-    """Hook every block's three pathway modules; returns the handles and {pathway: [norm per call]}."""
+    """Hook every block; returns the handles, {pathway: [norm per call]} and {"s"/"z": [input norm per call]}."""
     norms = {name: [] for name in PATHWAYS}
+    streams = {"s": [], "z": []}
+
+    def stream_hook(_module, inputs):
+        streams["s"].append(inputs[0].float().norm().item())
+        streams["z"].append(inputs[1].float().norm().item())
 
     def recorder(name, pick=lambda output: output):
         def hook(_module, _inputs, output):
@@ -62,11 +77,12 @@ def recording(blocks):
 
     handles = []
     for block in blocks:
+        handles.append(block.register_forward_pre_hook(stream_hook))
         handles.append(block.sequence_to_pair.register_forward_hook(recorder("seq2pair")))
         # EsmFoldSelfAttention returns (output, attention weights); the update to s is the output.
         handles.append(block.seq_attention.register_forward_hook(recorder("pair2seq", lambda output: output[0])))
         handles.append(block.pair_to_sequence.register_forward_hook(recorder("pair_bias")))
-    return handles, norms
+    return handles, norms, streams
 
 
 def sequences(args):
@@ -98,7 +114,7 @@ def measure(args):
 
     rows = []
     for name, sequence in tqdm(proteins, desc="proteins"):
-        handles, norms = recording(blocks)
+        handles, norms, streams = recording(blocks)
         try:
             fold(model, tokenizer, sequence)
         finally:
@@ -108,20 +124,22 @@ def measure(args):
             if len(values) != len(blocks):
                 sys.exit(f"{pathway} ran {len(values)} times for {len(blocks)} blocks; recycling must be off")
         for pathway, values in norms.items():
-            peak = max(values)
+            relative = [value / state for value, state in zip(values, streams[STREAM[pathway]])]
             rows.extend({
                 "protein": name, "length": len(sequence), "pathway": pathway, "block": k,
-                "norm": round(value, 4), "normalized": round(value / peak, 4),
-            } for k, value in enumerate(values))
+                "norm": round(value, 4), "normalized": round(value / max(values), 4),
+                "relative": round(rel, 5), "relative_normalized": round(rel / max(relative), 4),
+            } for k, (value, rel) in enumerate(zip(values, relative)))
 
     table = pd.DataFrame(rows)
     table.to_csv(args.out / "pathways.csv", index=False)
     return table
 
 
-def plot(table, path):
-    mean = table.pivot_table(index="block", columns="pathway", values="normalized", aggfunc="mean")
-    spread = table.pivot_table(index="block", columns="pathway", values="normalized", aggfunc="std").fillna(0)
+def plot(table, path, measure):
+    column = "relative_normalized" if measure == "relative" else "normalized"
+    mean = table.pivot_table(index="block", columns="pathway", values=column, aggfunc="mean")
+    spread = table.pivot_table(index="block", columns="pathway", values=column, aggfunc="std").fillna(0)
     proteins = table.protein.nunique()
 
     fig, ax = plt.subplots(figsize=(8, 4.2), facecolor=SURFACE)
@@ -137,7 +155,7 @@ def plot(table, path):
     ax.set_xlim(0, mean.index.max())
     ax.set_ylim(0, 1.05)
     ax.set_xlabel("trunk block", color=INK)
-    ax.set_ylabel("update norm / its maximum over blocks", color=INK)
+    ax.set_ylabel(("update norm / state norm" if measure == "relative" else "update norm") + ", over its maximum", color=INK)
     ax.set_title(f"Pathway contributions across the ESMFold trunk ({proteins} proteins, mean ± sd)",
                  color=INK, fontsize=12, loc="left")
     ax.yaxis.grid(True, color=GRID, linewidth=0.8)
@@ -160,6 +178,8 @@ def parse_args():
     p.add_argument("--data", type=Path, default=Path("reference/data/patching_dataset.csv"))
     p.add_argument("--limit", type=int, default=20, help="number of proteins per set")
     p.add_argument("--out", type=Path, default=Path("outputs/pathways"), help="results directory")
+    p.add_argument("--measure", choices=["raw", "relative"], default="raw",
+                   help="raw update norms, or each divided by the norm of the state entering the block")
     p.add_argument("--plot-only", action="store_true", help="redraw the figure from an existing pathways.csv")
     p.add_argument("--model", default="weights/esmfold", help=f"local ESMFold directory; falls back to {HUB_ID}")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -177,9 +197,12 @@ def main():
     else:
         table = measure(args)
 
-    path = args.out / "pathway_contributions.png"
-    plot(table, path)
-    mean = table.pivot_table(index="block", columns="pathway", values="normalized", aggfunc="mean")
+    column = "relative_normalized" if args.measure == "relative" else "normalized"
+    if column not in table:
+        sys.exit(f"{column} is not in the CSV: rerun without --plot-only to record it")
+    path = args.out / ("pathway_contributions_relative.png" if args.measure == "relative" else "pathway_contributions.png")
+    plot(table, path, args.measure)
+    mean = table.pivot_table(index="block", columns="pathway", values=column, aggfunc="mean")
     for pathway in PATHWAYS:
         print(f"{pathway}: peak at block {mean[pathway].idxmax()}, "
               f"mean of blocks 0-9 {mean[pathway][:10].mean():.2f}, last 10 {mean[pathway][-10:].mean():.2f}")
