@@ -95,7 +95,10 @@
 		that factor just before the structure module reads it. From 0.25 upward, scaling z moves the output distances
 		monotonically: the mean pairwise CA distance is 10.2 Å below the unscaled fold at 0.25, 3.6 Å below at 0.75, 2.7 Å above at
 		1.25 and 6.8 Å above at 2. Scaling s changes nothing, within 0.03 Å at every scale. The paper reports the same two results,
-		that the structure module takes its distances from z and not from s. The curve is steeper below 1 than above it. At 0 and
+		that the structure module takes its distances from z and not from s. The structure module explains this asymmetry: s goes
+		through a LayerNorm in its MLP (transition) section, which removes a uniform scale, while z is never updated by the
+		structure module, so nothing renormalizes it and the scaled z reaches the attention bias at full size in every layer. The
+		curve is steeper below 1 than above it. At 0 and
 		0.25 the input carries almost no pair information and the folds collapse (pLDDT 0.32 and 0.46), and the distance at 0 is
 		slightly larger than at 0.25, so the trend does not hold all the way down.
 		Part of the change is the chain itself changing length: consecutive CA atoms are 3.8 Å apart at scale 1, about 3.1 Å at
@@ -123,26 +126,27 @@
 	<p class="mt-1 text-sm leading-relaxed text-space-indigo-800">
 		At every trunk block, the norm of the update each pathway writes: the sequence-to-pair update added to z, and the
 		pair-to-sequence update added to s, taken as the sequence attention output, which is where z reaches s. Each pathway's 48
-		values are divided by their maximum and averaged over 517 proteins. This does not yet reproduce Fig. 4b. Pair-to-sequence
-		is small in the middle and rises late, as in the paper, but it also spikes at block 0. Sequence-to-pair stays between 0.3
-		and 0.5 through the middle and peaks at block 44, where the paper has it peaking in the first ten blocks and declining. The
-		curves are consistent across proteins, so the jaggedness comes from the blocks themselves. These are raw updates; ESMFold's
-		blocks are pre-norm, so dividing each by the size of the state it is added to may be the comparison the paper makes, and
-		that has not been run.
+		values are divided by their maximum and averaged over 40 proteins. This does not reproduce Fig. 4b. Pair-to-sequence is
+		small in the middle (0.14) and rises late, peaking at block 43, as in the paper, but it also spikes at block 0.
+		Sequence-to-pair is lowest at block 0 and stays between 0.3 and 0.5 through the trunk, peaking at block 44, where the paper
+		has it peaking in the first ten blocks and declining. These are raw updates, and ESMFold's blocks are pre-norm, so the
+		effect of an update depends on the size of the state it is added to. The paper does not say whether its norms are raw or
+		relative to that state. Dividing each update by the norm of z or s instead puts the sequence-to-pair peak at block 0 and
+		declines it through the trunk, but only because z is small at block 0 (about 2,200, against 36,000 at the end); the raw
+		update itself is smallest there.
 	</p>
 
 	<figure class="mt-4">
 		<img
 			src={pathwayContributions}
-			alt="Line chart of normalized update norm against trunk block. Sequence-to-pair rises from 0.2 at block 0 to about 0.5 by block 6, stays between 0.3 and 0.5 through the middle, and peaks at 1.0 at block 44. Pair-to-sequence starts at 1.0 at block 0, drops to near 0 and stays low through the middle, then rises to 0.8 at block 43. A dotted line for the attention bias alone is noisy, between 0.15 and 1.0."
+			alt="Line chart of normalized update norm against trunk block. Sequence-to-pair starts at 0.16 at block 0, rises to about 0.5 by block 6, stays between 0.3 and 0.5 through the middle, and peaks at 1.0 at block 44. Pair-to-sequence starts at 1.0 at block 0, drops to near 0 and stays low through the middle, then rises to 0.85 at block 43."
 			width="1600"
 			height="840"
 			class="h-auto w-full rounded-md border border-space-indigo-500"
 		/>
 		<figcaption class="mt-2 text-xs leading-relaxed text-space-indigo-700">
 			Update norm per trunk block, each pathway divided by its own maximum, after Fig. 4b of the paper. The shaded band is one
-			standard deviation over proteins. The dotted line is the pair-to-sequence attention bias alone, a weaker proxy. Not a
-			reproduction of the paper's curve yet.
+			standard deviation over 40 proteins. Not a reproduction of the paper's curve.
 		</figcaption>
 	</figure>
 </div>

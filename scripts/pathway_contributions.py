@@ -12,7 +12,7 @@ Per block, one fold without recycling records
     pair2seq    the update added to s: the output of block.seq_attention, the
                 only place z reaches s (it carries the pair bias)
     pair_bias   the output of block.pair_to_sequence, the bias alone; a weaker
-                proxy for pair2seq, plotted for comparison
+                proxy for pair2seq, recorded but not plotted
 Each is the Frobenius norm over all positions. The blocks are pre-norm: each
 sublayer LayerNorms its input and adds its raw output to the residual stream, so
 these are raw updates and their size depends on how large the stream is at that
@@ -48,6 +48,7 @@ from transformers import AutoTokenizer, EsmForProteinFolding
 from patch_esmfold import HUB_ID, fold
 
 PATHWAYS = ["seq2pair", "pair2seq", "pair_bias"]
+PLOTTED = ["seq2pair", "pair2seq"]
 LABELS = {
     "seq2pair": "seq2pair: update to z",
     "pair2seq": "pair2seq: update to s",
@@ -144,11 +145,10 @@ def plot(table, path, measure):
 
     fig, ax = plt.subplots(figsize=(8, 4.2), facecolor=SURFACE)
     ax.set_facecolor(SURFACE)
-    for pathway in PATHWAYS:
+    for pathway in PLOTTED:
         if pathway not in mean:
             continue
-        style = ":" if pathway == "pair_bias" else "-"
-        ax.plot(mean.index, mean[pathway], style, color=COLORS[pathway], linewidth=2, label=LABELS[pathway])
+        ax.plot(mean.index, mean[pathway], "-", color=COLORS[pathway], linewidth=2, label=LABELS[pathway])
         ax.fill_between(mean.index, mean[pathway] - spread[pathway], mean[pathway] + spread[pathway],
                         color=COLORS[pathway], alpha=0.12, linewidth=0)
 
