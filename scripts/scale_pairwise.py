@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Scale the pairwise representation before the structure module and fold (section 5.1, Fig. 6c-d).
 
-Isolates how the structure module reads z. The trunk runs once, untouched; its
-output projection into the structure module, trunk2sm_z(z), is then multiplied
-by a scale factor, with s left alone. The paper's result is that output distances
+Isolates how the structure module reads z. The trunk runs once, untouched; the
+pairwise input to the structure module is then multiplied by a scale factor, with
+s left alone. The scale is applied after the structure module's input LayerNorm
+(layer_norm_z), not to trunk2sm_z: that LayerNorm divides out any uniform scale,
+so scaling its input leaves the fold unchanged for every nonzero factor. The paper's result is that output distances
 follow the scale monotonically: scaling up expands the structure, scaling down
 contracts it, while the same treatment of s does nothing.
 
@@ -101,7 +103,8 @@ def main():
     print(f"Loading ESMFold from {args.model} on {args.device}")
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     model = EsmForProteinFolding.from_pretrained(args.model).to(args.device).eval()
-    projections = {"z": model.trunk.trunk2sm_z, "s": model.trunk.trunk2sm_s}
+    # The structure module's own input LayerNorms; scaling before them would be undone by the normalisation.
+    projections = {"z": model.trunk.structure_module.layer_norm_z, "s": model.trunk.structure_module.layer_norm_s}
 
     have_dssp = shutil.which("mkdssp") is not None
     if not have_dssp:
@@ -118,7 +121,7 @@ def main():
             finally:
                 handle.remove()
             if len(calls) != 1:
-                sys.exit(f"the {target} projection ran {len(calls)} times, not once; recycling must be off")
+                sys.exit(f"the {target} layer norm ran {len(calls)} times, not once; recycling must be off")
 
             pdbs = model.output_to_pdb(outputs)
             plddt = outputs.plddt[:, :, 1].float().cpu()
