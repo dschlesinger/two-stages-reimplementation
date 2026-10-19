@@ -8,7 +8,6 @@
 
 	const links = [
 		{ href: '/', label: 'Models' },
-		{ href: '/paper-results', label: 'Paper results' },
 		{ href: '/my-results', label: 'My results' }
 	];
 </script>
